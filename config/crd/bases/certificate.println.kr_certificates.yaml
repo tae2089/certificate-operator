@@ -1,0 +1,113 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: certificates.certificate.println.kr
+spec:
+  group: certificate.println.kr
+  names:
+    kind: Certificate
+    listKind: CertificateList
+    plural: certificates
+    singular: certificate
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Certificate is the Schema for the certificates API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: CertificateSpec defines the desired state of Certificate.
+            properties:
+              awsEnabled:
+                description: |-
+                  AWSEnabled controls whether to upload certificate to AWS ACM.
+                  Defaults to true if AWSSecretRef is set, or if using IAM Role.
+                type: boolean
+              awsSecretRef:
+                description: AWSSecretRef is the name of the Secret containing AWS
+                  credentials (access-key-id, secret-access-key, region).
+                type: string
+              cloudflareEnabled:
+                description: |-
+                  CloudflareEnabled controls whether to upload certificate to Cloudflare.
+                  Defaults to true if CloudflareSecretRef is set.
+                type: boolean
+              cloudflareSecretRef:
+                description: CloudflareSecretRef is the name of the Secret containing
+                  Cloudflare credentials (api-token).
+                type: string
+              cloudflareZoneID:
+                description: |-
+                  CloudflareZoneID is the Cloudflare Zone ID where the certificate will be uploaded.
+                  Required if CloudflareSecretRef is set.
+                type: string
+              domain:
+                description: Domain is the domain name for the certificate.
+                type: string
+              email:
+                description: Email is the email address for ACME registration.
+                type: string
+              ingressClassName:
+                description: |-
+                  IngressClassName is the name of the Ingress Class to be used for the HTTP01 solver.
+                  Defaults to "nginx" if not specified.
+                type: string
+              issuerName:
+                description: IssuerName is the name of the Issuer to create or use.
+                type: string
+            required:
+            - domain
+            - email
+            type: object
+          status:
+            description: CertificateStatus defines the observed state of Certificate.
+            properties:
+              awsCertificateARN:
+                description: AWSCertificateARN is the ARN of the certificate in AWS
+                  ACM.
+                type: string
+              awsUploaded:
+                description: AWSUploaded is true if the certificate has been uploaded
+                  to AWS ACM.
+                type: boolean
+              certificateRef:
+                description: CertificateRef references the created Certificate.
+                type: string
+              cloudflareCertificateID:
+                description: CloudflareCertificateID is the ID of the certificate
+                  in Cloudflare.
+                type: string
+              cloudflareUploaded:
+                description: CloudflareUploaded is true if the certificate has been
+                  uploaded to Cloudflare.
+                type: boolean
+              issuerRef:
+                description: IssuerRef references the created Issuer.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
