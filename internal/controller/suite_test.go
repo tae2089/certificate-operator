@@ -32,6 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	certificatev1alpha1 "github.com/tae2089/certificate-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -60,6 +61,10 @@ var _ = BeforeSuite(func() {
 
 	var err error
 	err = certificatev1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Add cert-manager types to scheme
+	err = certmanagerv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
