@@ -13,17 +13,78 @@ Kubernetes operator that automates certificate management using cert-manager and
 
 ## Architecture
 
+### System Overview
+
+```mermaid
+flowchart TB
+    User([User]) -->|Creates| CR[Certificate CR]
+    
+    subgraph "certificate-operator"
+        Controller[Certificate Controller]
+        Manager[Certificate Manager]
+        
+        subgraph "Drivers"
+            K8s[Kubernetes Driver]
+            AWS[AWS Driver]
+            CF[Cloudflare Driver]
+        end
+    end
+    
+    subgraph "cert-manager"
+        CMCert[Certificate Resource]
+        Secret[TLS Secret]
+    end
+    
+    subgraph "Cloud Providers"
+        ACM[AWS ACM]
+        CFCloud[Cloudflare SSL]
+    end
+    
+    CR -->|Watches| Controller
+    Controller -->|Orchestrates| Manager
+    
+    Manager -->|cert-manager ops| K8s
+    Manager -->|upload cert| AWS
+    Manager -->|upload cert| CF
+    
+    K8s -->|creates| CMCert
+    CMCert -->|references| CI[ClusterIssuer]
+    CMCert -->|generates| Secret
+    
+    Secret -.->|triggers watch| Controller
+    
+    AWS -->|imports| ACM
+    CF -->|uploads| CFCloud
+    
+    style CR fill:#e1f5ff
+    style Manager fill:#fff4e1
+    style Secret fill:#e8f5e9
+    style CI fill:#99ff99
 ```
-Controller → CertificateManager → Drivers
-                                   ├── AWS (ACM)
-                                   ├── Cloudflare (SSL)
-                                   └── Kubernetes (cert-manager)
-```
+
+### Certificate Lifecycle Flow
+
+![Certificate Lifecycle Sequence Diagram](./sequence.png)
+
+**Key Steps:**
+
+1. **Certificate Creation**: User creates Certificate CR, Controller watches and triggers Manager
+2. **ClusterIssuer Reference**: Manager sets default ClusterIssuer (letsencrypt-prod) if not specified
+3. **cert-manager Integration**: Kubernetes Driver creates cert-manager Certificate with ClusterIssuer reference
+4. **Readiness Check**: Waits for Certificate to be ready, requeues if not ready
+5. **TLS Secret Retrieval**: Fetches TLS certificate and private key from Secret
+6. **Change Detection**: Calculates SHA256 hash and compares with last uploaded certificate
+7. **Cloud Upload**: If changed, uploads in parallel to AWS ACM and Cloudflare SSL
+8. **Status Update**: Updates CR status with hash, timestamp, and cloud provider IDs
+9. **Auto-Renewal**: On certificate renewal, Secret watch triggers automatic re-upload
+
 
 **Design Principles:**
 - Interface-based driver pattern for cloud providers
 - Dependency injection for testability
 - Separation of concerns (orchestration vs. implementation)
+- Event-driven reconciliation via Secret watches
+
 
 ## Prerequisites
 
