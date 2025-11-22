@@ -26,8 +26,6 @@ type (
 	CertManager     = types.CertManager
 	CertificateData = types.CertificateData
 	UploadResult    = types.UploadResult
-	IssuerSpec      = types.IssuerSpec
-	IssuerResult    = types.IssuerResult
 	CertSpec        = types.CertSpec
 	CertResult      = types.CertResult
 	TLSSecret       = types.TLSSecret

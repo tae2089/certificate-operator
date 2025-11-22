@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	acmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,17 +31,11 @@ type CertificateSpec struct {
 	// Domain is the domain name for the certificate.
 	Domain string `json:"domain"`
 
-	// Email is the email address for ACME registration.
-	Email string `json:"email"`
-
-	// IssuerName is the name of the Issuer to create or use.
+	// ClusterIssuerName is the name of the pre-existing ClusterIssuer to use.
+	// Defaults to "letsencrypt-prod" if not specified.
 	// +optional
-	IssuerName string `json:"issuerName,omitempty"`
-
-	// HTTP01Ingress provides advanced configuration for HTTP-01 ACME challenge solver.
-	// If not specified, defaults to nginx ingress class.
-	// +optional
-	HTTP01Ingress *acmev1.ACMEChallengeSolverHTTP01Ingress `json:"http01Ingress,omitempty"`
+	// +kubebuilder:default="letsencrypt-prod"
+	ClusterIssuerName string `json:"clusterIssuerName,omitempty"`
 
 	// CloudflareSecretRef is the name of the Secret containing Cloudflare credentials (api-token).
 	// +optional
@@ -72,9 +65,6 @@ type CertificateSpec struct {
 type CertificateStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// IssuerRef references the created Issuer.
-	IssuerRef string `json:"issuerRef,omitempty"`
 
 	// CertificateRef references the created Certificate.
 	CertificateRef string `json:"certificateRef,omitempty"`

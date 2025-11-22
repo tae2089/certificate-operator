@@ -1,5 +1,5 @@
 ---
-# Basic usage (defaults to nginx ingress class)
+# Basic usage with default ClusterIssuer
 apiVersion: certificate.println.kr/v1alpha1
 kind: Certificate
 metadata:
@@ -7,80 +7,18 @@ metadata:
   namespace: default
 spec:
   domain: "example.com"
-  email: "admin@example.com"
-  # http01Ingress is optional, defaults to nginx if not specified
+  # clusterIssuerName defaults to "letsencrypt-prod" if not specified
 
 ---
-# Specify ingress class explicitly
+# Using a specific ClusterIssuer
 apiVersion: certificate.println.kr/v1alpha1
 kind: Certificate
 metadata:
-  name: example-nginx
+  name: example-staging
   namespace: default
 spec:
-  domain: "nginx.example.com"
-  email: "admin@example.com"
-  http01Ingress:
-    ingressClassName: "nginx"  # Recommended for Kubernetes 1.18+
-
----
-# Using Traefik ingress
-apiVersion: certificate.println.kr/v1alpha1
-kind: Certificate
-metadata:
-  name: example-traefik
-  namespace: default
-spec:
-  domain: "traefik.example.com"
-  email: "admin@example.com"
-  http01Ingress:
-    ingressClassName: "traefik"
-
----
-# Advanced configuration with pod customization
-apiVersion: certificate.println.kr/v1alpha1
-kind: Certificate
-metadata:
-  name: example-advanced
-  namespace: default
-spec:
-  domain: "advanced.example.com"
-  email: "admin@example.com"
-  http01Ingress:
-    ingressClassName: "nginx"
-    podTemplate:
-      metadata:
-        labels:
-          app: acme-solver
-          environment: production
-      spec:
-        nodeSelector:
-          solver: "true"
-        tolerations:
-          - key: "dedicated"
-            operator: "Equal"
-            value: "acme"
-            effect: "NoSchedule"
-        priorityClassName: high-priority
-    serviceType: NodePort
-
----
-# Using ingressTemplate for custom annotations
-apiVersion: certificate.println.kr/v1alpha1
-kind: Certificate
-metadata:
-  name: example-template
-  namespace: default
-spec:
-  domain: "template.example.com"
-  email: "admin@example.com"
-  http01Ingress:
-    ingressClassName: "nginx"
-    ingressTemplate:
-      metadata:
-        annotations:
-          cert-manager.io/issue-temporary-certificate: "true"
-          nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  domain: "staging.example.com"
+  clusterIssuerName: "letsencrypt-staging"  # Use staging issuer for testing
 
 ---
 # Complete example with cloud providers
@@ -91,23 +29,24 @@ metadata:
   namespace: default
 spec:
   domain: "complete.example.com"
-  email: "admin@example.com"
+  clusterIssuerName: "letsencrypt-prod"
   
-  # HTTP-01 solver configuration
-  http01Ingress:
-    ingressClassName: "nginx"
-    podTemplate:
-      metadata:
-        labels:
-          app: acme-solver
-      spec:
-        tolerations:
-          - key: "dedicated"
-            operator: "Equal"
-            value: "acme"
-            effect: "NoSchedule"
-  
-  # Cloud provider configuration
+  # Upload to Cloudflare
   cloudflareSecretRef: "cloudflare-credentials"
   cloudflareZoneID: "your-zone-id"
+  
+  # Upload to AWS ACM
   awsSecretRef: "aws-credentials"
+
+---
+# Multiple domains example
+apiVersion: certificate.println.kr/v1alpha1
+kind: Certificate
+metadata:
+  name: example-multi-domain
+  namespace: default
+spec:
+  domain: "*.example.com"  # Wildcard certificate
+  clusterIssuerName: "letsencrypt-prod"
+  cloudflareSecretRef: "cloudflare-credentials"
+  cloudflareZoneID: "your-zone-id"

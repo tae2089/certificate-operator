@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	acmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	drivertypes "github.com/tae2089/certificate-operator/internal/driver/types"
@@ -46,78 +45,6 @@ func NewDriver(client client.Client, scheme *runtime.Scheme) *Driver {
 		client: client,
 		scheme: scheme,
 	}
-}
-
-// EnsureIssuer creates or updates a cert-manager Issuer
-func (d *Driver) EnsureIssuer(ctx context.Context, spec drivertypes.IssuerSpec) (*drivertypes.IssuerResult, error) {
-	issuerName := spec.Name
-	if issuerName == "" {
-		issuerName = "default-issuer"
-	}
-
-	issuer := &certmanagerv1.Issuer{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      issuerName,
-			Namespace: spec.Namespace,
-		},
-	}
-
-	_, err := ctrl.CreateOrUpdate(ctx, d.client, issuer, func() error {
-		if issuer.Labels == nil {
-			issuer.Labels = make(map[string]string)
-		}
-		issuer.Labels["app.kubernetes.io/managed-by"] = "certificate-operator"
-
-		// Set owner references
-		if len(spec.OwnerReferences) > 0 {
-			issuer.OwnerReferences = spec.OwnerReferences
-		}
-
-		// Configure HTTP-01 solver
-		var http01Ingress *acmev1.ACMEChallengeSolverHTTP01Ingress
-
-		if spec.HTTP01Ingress != nil {
-			// Use provided HTTP01Ingress configuration
-			http01Ingress = spec.HTTP01Ingress
-		} else {
-			// Default to nginx ingress class
-			defaultClass := "nginx"
-			http01Ingress = &acmev1.ACMEChallengeSolverHTTP01Ingress{
-				Class: &defaultClass,
-			}
-		}
-
-		issuer.Spec = certmanagerv1.IssuerSpec{
-			IssuerConfig: certmanagerv1.IssuerConfig{
-				ACME: &acmev1.ACMEIssuer{
-					Email:  spec.Email,
-					Server: "https://acme-staging-v02.api.letsencrypt.org/directory",
-					PrivateKey: cmmeta.SecretKeySelector{
-						LocalObjectReference: cmmeta.LocalObjectReference{
-							Name: issuerName + "-account-key",
-						},
-					},
-					Solvers: []acmev1.ACMEChallengeSolver{
-						{
-							HTTP01: &acmev1.ACMEChallengeSolverHTTP01{
-								Ingress: http01Ingress,
-							},
-						},
-					},
-				},
-			},
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &drivertypes.IssuerResult{
-		Issuer: issuer,
-		Name:   issuerName,
-	}, nil
 }
 
 // EnsureCertificate creates or updates a cert-manager Certificate
@@ -140,12 +67,19 @@ func (d *Driver) EnsureCertificate(ctx context.Context, spec drivertypes.CertSpe
 			certReq.OwnerReferences = spec.OwnerReferences
 		}
 
+		// Set default ClusterIssuer if not specified
+		clusterIssuerName := spec.ClusterIssuerName
+		if clusterIssuerName == "" {
+			clusterIssuerName = "letsencrypt-prod"
+		}
+
 		certReq.Spec = certmanagerv1.CertificateSpec{
 			DNSNames:   []string{spec.Domain},
 			SecretName: spec.SecretName,
 			IssuerRef: cmmeta.ObjectReference{
-				Name: spec.IssuerName,
-				Kind: "Issuer",
+				Name:  clusterIssuerName,
+				Kind:  "ClusterIssuer",
+				Group: "cert-manager.io",
 			},
 		}
 		return nil
@@ -187,32 +121,9 @@ func (d *Driver) GetTLSSecret(ctx context.Context, name, namespace string) (*dri
 	}, nil
 }
 
-// WaitForReadiness checks if Issuer and Certificate are ready
-func (d *Driver) WaitForReadiness(ctx context.Context, issuerName, certName, namespace string) (ctrl.Result, error) {
+// WaitForReadiness checks if Certificate is ready
+func (d *Driver) WaitForReadiness(ctx context.Context, certName, namespace string) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-
-	// Get Issuer
-	issuer := &certmanagerv1.Issuer{}
-	if err := d.client.Get(ctx, types.NamespacedName{
-		Name:      issuerName,
-		Namespace: namespace,
-	}, issuer); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	// Check if Issuer is Ready
-	issuerReady := false
-	for _, cond := range issuer.Status.Conditions {
-		if cond.Type == "Ready" && cond.Status == "True" {
-			issuerReady = true
-			break
-		}
-	}
-
-	if !issuerReady {
-		log.Info("Waiting for Issuer to be ready", "issuer", issuerName)
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
-	}
 
 	// Get Certificate
 	cert := &certmanagerv1.Certificate{}
@@ -237,7 +148,7 @@ func (d *Driver) WaitForReadiness(ctx context.Context, issuerName, certName, nam
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
 
-	// Both are ready
+	// Certificate is ready
 	log.Info("Certificate is ready, waiting for TLS secret to be created", "certificate", certName)
 	return ctrl.Result{RequeueAfter: time.Minute}, nil
 }

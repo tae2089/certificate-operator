@@ -19,7 +19,6 @@ package types
 import (
 	"context"
 
-	acmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,17 +39,14 @@ type CloudProvider interface {
 
 // CertManager manages cert-manager resources in Kubernetes
 type CertManager interface {
-	// EnsureIssuer creates or updates a cert-manager Issuer
-	EnsureIssuer(ctx context.Context, spec IssuerSpec) (*IssuerResult, error)
-
 	// EnsureCertificate creates or updates a cert-manager Certificate
 	EnsureCertificate(ctx context.Context, spec CertSpec) (*CertResult, error)
 
 	// GetTLSSecret retrieves and validates a TLS Secret
 	GetTLSSecret(ctx context.Context, name, namespace string) (*TLSSecret, error)
 
-	// WaitForReadiness checks if Issuer and Certificate are ready
-	WaitForReadiness(ctx context.Context, issuerName, certName, namespace string) (ctrl.Result, error)
+	// WaitForReadiness checks if Certificate is ready
+	WaitForReadiness(ctx context.Context, certName, namespace string) (ctrl.Result, error)
 }
 
 // CertificateData holds certificate information for upload
@@ -66,29 +62,14 @@ type UploadResult struct {
 	Identifier string // ARN for AWS, certificate ID for Cloudflare
 }
 
-// IssuerSpec contains specification for creating an Issuer
-type IssuerSpec struct {
-	Name            string
-	Namespace       string
-	Email           string
-	HTTP01Ingress   *acmev1.ACMEChallengeSolverHTTP01Ingress // Advanced HTTP-01 configuration
-	OwnerReferences []metav1.OwnerReference
-}
-
-// IssuerResult contains the result of Issuer creation
-type IssuerResult struct {
-	Issuer *certmanagerv1.Issuer
-	Name   string
-}
-
 // CertSpec contains specification for creating a Certificate
 type CertSpec struct {
-	Name            string
-	Namespace       string
-	Domain          string
-	IssuerName      string
-	SecretName      string
-	OwnerReferences []metav1.OwnerReference
+	Name              string
+	Namespace         string
+	Domain            string
+	ClusterIssuerName string
+	SecretName        string
+	OwnerReferences   []metav1.OwnerReference
 }
 
 // CertResult contains the result of Certificate creation

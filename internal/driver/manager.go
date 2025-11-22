@@ -54,27 +54,19 @@ func NewCertificateManager(k8sClient client.Client, scheme *runtime.Scheme) *Cer
 func (m *CertificateManager) ProcessCertificate(ctx context.Context, cert *certificatev1alpha1.Certificate) (ctrl.Result, bool, error) {
 	log := logf.FromContext(ctx)
 
-	// Ensure cert-manager Issuer
-	issuerResult, err := m.certManager.EnsureIssuer(ctx, types.IssuerSpec{
-		Name:          cert.Spec.IssuerName,
-		Namespace:     cert.Namespace,
-		Email:         cert.Spec.Email,
-		HTTP01Ingress: cert.Spec.HTTP01Ingress,
-		OwnerReferences: []metav1.OwnerReference{
-			*metav1.NewControllerRef(cert, certificatev1alpha1.GroupVersion.WithKind("Certificate")),
-		},
-	})
-	if err != nil {
-		return ctrl.Result{}, false, err
+	// Set default ClusterIssuer name if not specified
+	clusterIssuerName := cert.Spec.ClusterIssuerName
+	if clusterIssuerName == "" {
+		clusterIssuerName = "letsencrypt-prod"
 	}
 
-	// Ensure cert-manager Certificate
+	// Ensure cert-manager Certificate with ClusterIssuer reference
 	certResult, err := m.certManager.EnsureCertificate(ctx, types.CertSpec{
-		Name:       cert.Name + "-cert",
-		Namespace:  cert.Namespace,
-		Domain:     cert.Spec.Domain,
-		IssuerName: issuerResult.Name,
-		SecretName: cert.Name + "-tls",
+		Name:              cert.Name + "-cert",
+		Namespace:         cert.Namespace,
+		Domain:            cert.Spec.Domain,
+		ClusterIssuerName: clusterIssuerName,
+		SecretName:        cert.Name + "-tls",
 		OwnerReferences: []metav1.OwnerReference{
 			*metav1.NewControllerRef(cert, certificatev1alpha1.GroupVersion.WithKind("Certificate")),
 		},
@@ -85,8 +77,7 @@ func (m *CertificateManager) ProcessCertificate(ctx context.Context, cert *certi
 
 	// Update status if needed
 	statusUpdated := false
-	if cert.Status.IssuerRef != issuerResult.Name || cert.Status.CertificateRef != certResult.Name {
-		cert.Status.IssuerRef = issuerResult.Name
+	if cert.Status.CertificateRef != certResult.Name {
 		cert.Status.CertificateRef = certResult.Name
 		statusUpdated = true
 	}
@@ -95,7 +86,7 @@ func (m *CertificateManager) ProcessCertificate(ctx context.Context, cert *certi
 	tlsSecret, err := m.certManager.GetTLSSecret(ctx, cert.Name+"-tls", cert.Namespace)
 	if err != nil {
 		// Secret doesn't exist, wait for readiness
-		result, waitErr := m.certManager.WaitForReadiness(ctx, issuerResult.Name, certResult.Name, cert.Namespace)
+		result, waitErr := m.certManager.WaitForReadiness(ctx, certResult.Name, cert.Namespace)
 		return result, statusUpdated, waitErr
 	}
 

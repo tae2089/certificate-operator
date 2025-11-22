@@ -29,6 +29,7 @@ Controller → CertificateManager → Drivers
 
 - Kubernetes cluster
 - [cert-manager](https://cert-manager.io/) installed
+- **ClusterIssuer configured** (see setup below)
 - Ingress controller (e.g., nginx-ingress)
 
 ## Installation
@@ -39,6 +40,54 @@ make install
 
 # Deploy operator
 make deploy
+```
+
+## ClusterIssuer Setup
+
+Before using this operator, you need to create a ClusterIssuer. Here's an example for Let's Encrypt:
+
+### Production ClusterIssuer
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
+```
+
+### Staging ClusterIssuer (for testing)
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
+```
+
+Apply the ClusterIssuer:
+
+```bash
+kubectl apply -f clusterissuer.yaml
 ```
 
 ## Usage
@@ -55,60 +104,13 @@ metadata:
   namespace: default
 spec:
   domain: "example.com"
-  email: "admin@example.com"
-  # http01Ingress is optional, defaults to nginx if not specified
+  clusterIssuerName: "letsencrypt-prod"  # Reference existing ClusterIssuer
+  # Defaults to "letsencrypt-prod" if not specified
 ```
 
 ### HTTP-01 Solver Configuration
 
-Configure the ACME HTTP-01 challenge solver using `http01Ingress`:
-
-```yaml
-apiVersion: certificate.println.kr/v1alpha1
-kind: Certificate
-metadata:
-  name: example-cert
-  namespace: default
-spec:
-  domain: "example.com"
-  email: "admin@example.com"
-  http01Ingress:
-    ingressClassName: "nginx"  # or "traefik", etc.
-```
-
-**Advanced Configuration:**
-
-```yaml
-spec:
-  domain: "example.com"
-  email: "admin@example.com"
-  http01Ingress:
-    ingressClassName: "nginx"
-    podTemplate:
-      metadata:
-        labels:
-          app: acme-solver
-      spec:
-        nodeSelector:
-          solver: "true"
-        tolerations:
-          - key: "dedicated"
-            operator: "Equal"
-            value: "acme"
-            effect: "NoSchedule"
-    serviceType: NodePort
-    ingressTemplate:
-      metadata:
-        annotations:
-          nginx.ingress.kubernetes.io/ssl-redirect: "false"
-```
-
-**Available Options:**
-- `ingressClassName`: Ingress class to use (e.g., nginx, traefik)
-- `class`: Legacy alternative to ingressClassName
-- `podTemplate`: Customize solver pod (labels, nodeSelector, tolerations, etc.)
-- `serviceType`: ClusterIP, NodePort, or LoadBalancer
-- `ingressTemplate`: Add custom annotations/labels to solver Ingress
+The HTTP-01 solver configuration is managed in your ClusterIssuer, not in the Certificate CR. This allows centralized configuration across all certificates.
 
 
 ### With Cloudflare Upload
