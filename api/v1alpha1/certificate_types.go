@@ -89,6 +89,15 @@ type CertificateStatus struct {
 
 	// CloudflareCertificateID is the ID of the certificate in Cloudflare.
 	CloudflareCertificateID string `json:"cloudflareCertificateID,omitempty"`
+
+	// LastUploadedCertHash is the SHA256 hash of the last uploaded certificate.
+	// Used to detect certificate renewals.
+	// +optional
+	LastUploadedCertHash string `json:"lastUploadedCertHash,omitempty"`
+
+	// LastUploadedTime is the timestamp of the last successful upload to cloud providers.
+	// +optional
+	LastUploadedTime *metav1.Time `json:"lastUploadedTime,omitempty"`
 }
 
 // +kubebuilder:object:root=true
