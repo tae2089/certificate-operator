@@ -40,6 +40,7 @@ import (
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	certificatev1alpha1 "github.com/tae2089/certificate-operator/api/v1alpha1"
 	"github.com/tae2089/certificate-operator/internal/controller"
+	"github.com/tae2089/certificate-operator/internal/driver"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -205,8 +206,9 @@ func main() {
 	}
 
 	if err := (&controller.CertificateReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Manager: driver.NewCertificateManager(mgr.GetClient(), mgr.GetScheme()),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Certificate")
 		os.Exit(1)
