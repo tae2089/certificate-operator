@@ -105,6 +105,16 @@ spec:
               issuerRef:
                 description: IssuerRef references the created Issuer.
                 type: string
+              lastUploadedCertHash:
+                description: |-
+                  LastUploadedCertHash is the SHA256 hash of the last uploaded certificate.
+                  Used to detect certificate renewals.
+                type: string
+              lastUploadedTime:
+                description: LastUploadedTime is the timestamp of the last successful
+                  upload to cloud providers.
+                format: date-time
+                type: string
             type: object
         type: object
     served: true
