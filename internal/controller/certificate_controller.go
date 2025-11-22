@@ -64,7 +64,7 @@ func (r *CertificateReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Handle deletion
-	if !cert.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !cert.DeletionTimestamp.IsZero() {
 		return r.handleDeletion(ctx, &cert)
 	}
 

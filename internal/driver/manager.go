@@ -99,10 +99,7 @@ func (m *CertificateManager) ProcessCertificate(ctx context.Context, cert *certi
 	log.V(1).Info("TLS Secret found, proceeding with certificate upload")
 
 	// Upload certificates to cloud providers if changed
-	certChanged, err := m.uploadToCloudProviders(ctx, cert, tlsSecret.Certificate, tlsSecret.PrivateKey, &statusUpdated)
-	if err != nil {
-		return ctrl.Result{}, statusUpdated, err
-	}
+	certChanged := m.uploadToCloudProviders(ctx, cert, tlsSecret.Certificate, tlsSecret.PrivateKey, &statusUpdated)
 
 	// Update hash and timestamp if certificate was uploaded
 	if certChanged && (cert.Status.CloudflareUploaded || cert.Status.AWSUploaded) {
@@ -121,7 +118,7 @@ func (m *CertificateManager) uploadToCloudProviders(
 	cert *certificatev1alpha1.Certificate,
 	tlsCert, tlsKey []byte,
 	statusUpdated *bool,
-) (bool, error) {
+) bool {
 	log := logf.FromContext(ctx)
 
 	// Calculate certificate hash to detect renewals
@@ -190,7 +187,7 @@ func (m *CertificateManager) uploadToCloudProviders(
 		}
 	}
 
-	return certChanged, nil
+	return certChanged
 }
 
 // Finalize performs cleanup when Certificate is being deleted

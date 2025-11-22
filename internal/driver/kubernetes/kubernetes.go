@@ -40,9 +40,9 @@ type Driver struct {
 }
 
 // NewDriver creates a new Kubernetes cert-manager driver
-func NewDriver(client client.Client, scheme *runtime.Scheme) *Driver {
+func NewDriver(k8sClient client.Client, scheme *runtime.Scheme) *Driver {
 	return &Driver{
-		client: client,
+		client: k8sClient,
 		scheme: scheme,
 	}
 }
