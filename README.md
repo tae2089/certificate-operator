@@ -4,10 +4,26 @@ Kubernetes operator that automates certificate management using cert-manager and
 
 ## Features
 
-- 🔐 Automatic certificate provisioning via cert-manager (ACME HTTP-01)
-- ☁️ Auto-upload to Cloudflare and AWS ACM
-- 🔄 Periodic readiness checks (1-minute interval)
-- 🎯 Simple CRD-based configuration
+- 🔐 **Automatic Certificate Provisioning**: Uses cert-manager with ACME HTTP-01 challenge
+- ☁️ **Multi-Cloud Upload**: Automatically uploads to Cloudflare and AWS ACM
+- 🔄 **Auto-Renewal Detection**: Detects renewed certificates via SHA256 hash tracking
+- 🎯 **Event-Driven**: Secret watch triggers instant reconciliation on certificate changes
+- 🏗️ **Clean Architecture**: Driver pattern with dependency injection for better testability
+- 🧹 **Automatic Cleanup**: Removes cloud certificates when CR is deleted
+
+## Architecture
+
+```
+Controller → CertificateManager → Drivers
+                                   ├── AWS (ACM)
+                                   ├── Cloudflare (SSL)
+                                   └── Kubernetes (cert-manager)
+```
+
+**Design Principles:**
+- Interface-based driver pattern for cloud providers
+- Dependency injection for testability
+- Separation of concerns (orchestration vs. implementation)
 
 ## Prerequisites
 
@@ -40,8 +56,60 @@ metadata:
 spec:
   domain: "example.com"
   email: "admin@example.com"
-  ingressClassName: "nginx"  # Optional, defaults to "nginx"
+  # http01Ingress is optional, defaults to nginx if not specified
 ```
+
+### HTTP-01 Solver Configuration
+
+Configure the ACME HTTP-01 challenge solver using `http01Ingress`:
+
+```yaml
+apiVersion: certificate.println.kr/v1alpha1
+kind: Certificate
+metadata:
+  name: example-cert
+  namespace: default
+spec:
+  domain: "example.com"
+  email: "admin@example.com"
+  http01Ingress:
+    ingressClassName: "nginx"  # or "traefik", etc.
+```
+
+**Advanced Configuration:**
+
+```yaml
+spec:
+  domain: "example.com"
+  email: "admin@example.com"
+  http01Ingress:
+    ingressClassName: "nginx"
+    podTemplate:
+      metadata:
+        labels:
+          app: acme-solver
+      spec:
+        nodeSelector:
+          solver: "true"
+        tolerations:
+          - key: "dedicated"
+            operator: "Equal"
+            value: "acme"
+            effect: "NoSchedule"
+    serviceType: NodePort
+    ingressTemplate:
+      metadata:
+        annotations:
+          nginx.ingress.kubernetes.io/ssl-redirect: "false"
+```
+
+**Available Options:**
+- `ingressClassName`: Ingress class to use (e.g., nginx, traefik)
+- `class`: Legacy alternative to ingressClassName
+- `podTemplate`: Customize solver pod (labels, nodeSelector, tolerations, etc.)
+- `serviceType`: ClusterIP, NodePort, or LoadBalancer
+- `ingressTemplate`: Add custom annotations/labels to solver Ingress
+
 
 ### With Cloudflare Upload
 
@@ -93,6 +161,7 @@ For production environments, use IRSA (IAM Role for Service Account) or EC2 Inst
       "Effect": "Allow",
       "Action": [
         "acm:ImportCertificate",
+        "acm:DeleteCertificate",
         "acm:AddTagsToCertificate"
       ],
       "Resource": "*"
@@ -165,17 +234,39 @@ spec:
   email: "admin@example.com"
   ingressClassName: "nginx"
   cloudflareSecretRef: "cloudflare-credentials"
+  cloudflareZoneID: "your-zone-id-here"
   awsSecretRef: "aws-credentials"
 ```
 
 ## How It Works
 
+### Certificate Lifecycle
+
 1. **Issuer Creation**: Operator creates a cert-manager Issuer (ACME staging by default)
 2. **Certificate Request**: Creates a cert-manager Certificate resource
-3. **Readiness Check**: Polls every minute until Issuer and Certificate are ready
+3. **Readiness Check**: Polls until Issuer and Certificate are ready
 4. **Secret Retrieval**: Fetches the generated TLS certificate from the Secret
-5. **Cloud Upload**: Uploads to configured cloud providers
-6. **Status Update**: Updates CR status with upload results
+5. **Certificate Hashing**: Calculates SHA256 hash for change detection
+6. **Cloud Upload**: Uploads to configured cloud providers (if hash changed)
+7. **Status Update**: Updates CR status with ARN/IDs and upload timestamps
+
+### Automatic Renewal
+
+The operator automatically detects and handles certificate renewals:
+
+- **Hash Tracking**: Stores SHA256 hash of uploaded certificates
+- **Secret Watch**: Monitors TLS Secrets for changes (no polling needed)
+- **Smart Re-upload**: Only re-uploads when certificate content changes
+- **AWS Re-import**: Uses same ARN for renewals (no new ARN)
+- **Cloudflare Replace**: Deletes old cert and uploads new one
+
+### Deletion Handling
+
+When a Certificate CR is deleted:
+- Finalizer ensures proper cleanup
+- Deletes certificate from AWS ACM (if uploaded)
+- Deletes certificate from Cloudflare (if uploaded)
+- cert-manager resources deleted automatically (owner references)
 
 ## CRD Specification
 
@@ -183,12 +274,13 @@ spec:
 |-------|------|----------|-------------|
 | `domain` | string | Yes | Domain name for the certificate |
 | `email` | string | Yes | Email for ACME registration |
-| `issuerName` | string | No | Custom Issuer name (defaults to `{cert-name}-issuer`) |
+| `issuerName` | string | No | Custom Issuer name (defaults to `default-issuer`) |
 | `ingressClassName` | string | No | Ingress class for HTTP-01 solver (defaults to `nginx`) |
 | `cloudflareSecretRef` | string | No | Secret name containing Cloudflare credentials |
+| `cloudflareZoneID` | string | Conditional | Cloudflare zone ID (required if using Cloudflare) |
 | `cloudflareEnabled` | bool | No | Enable/disable Cloudflare upload (defaults to true if secret is set) |
-| `awsSecretRef` | string | No | Secret name containing AWS credentials |
-| `awsEnabled` | bool | No | Enable/disable AWS upload (defaults to true if secret is set) |
+| `awsSecretRef` | string | No | Secret name containing AWS credentials (omit for IRSA) |
+| `awsEnabled` | bool | No | Enable/disable AWS upload (defaults to true) |
 
 ### Usage Examples
 
@@ -207,6 +299,7 @@ spec:
   domain: "example.com"
   email: "admin@example.com"
   cloudflareSecretRef: "cloudflare-credentials"
+  cloudflareZoneID: "your-zone-id"
   # awsSecretRef omitted - AWS upload disabled
 ```
 
@@ -217,9 +310,15 @@ spec:
 | `issuerRef` | string | Name of the created Issuer |
 | `certificateRef` | string | Name of the created cert-manager Certificate |
 | `cloudflareUploaded` | bool | True if uploaded to Cloudflare |
+| `cloudflareCertificateID` | string | Cloudflare certificate ID |
 | `awsUploaded` | bool | True if uploaded to AWS ACM |
+| `awsCertificateARN` | string | AWS ACM certificate ARN |
+| `lastUploadedCertHash` | string | SHA256 hash of last uploaded certificate |
+| `lastUploadedTime` | timestamp | Time of last successful upload |
 
 ## Development
+
+### Running Locally
 
 ```bash
 # Run tests
@@ -231,6 +330,33 @@ make build
 # Run locally (requires kubeconfig)
 make run
 ```
+
+### Architecture
+
+The operator uses a driver pattern for extensibility:
+
+- **`internal/driver/types/`**: Interface definitions
+- **`internal/driver/kubernetes/`**: cert-manager driver
+- **`internal/driver/aws/`**: AWS ACM driver  
+- **`internal/driver/cloudflare/`**: Cloudflare SSL driver
+- **`internal/driver/manager.go`**: Orchestrates all drivers
+
+**Adding a New Provider:**
+1. Implement the `CloudProvider` interface
+2. Create new driver package under `internal/driver/`
+3. Add to `CertificateManager.uploadToCloudProviders()`
+
+## Troubleshooting
+
+**Certificate not uploading to cloud:**
+- Check Secret exists and has correct keys
+- Verify credentials have proper permissions
+- Check operator logs: `kubectl logs -n certificate-operator-system deployment/certificate-operator-controller-manager`
+
+**Renewal not working:**
+- Secret watch triggers reconciliation automatically
+- Check if TLS Secret was updated by cert-manager
+- Verify hash changed in status: `kubectl get certificate example-cert -o yaml`
 
 ## License
 

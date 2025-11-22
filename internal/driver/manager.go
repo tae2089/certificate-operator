@@ -56,10 +56,10 @@ func (m *CertificateManager) ProcessCertificate(ctx context.Context, cert *certi
 
 	// Ensure cert-manager Issuer
 	issuerResult, err := m.certManager.EnsureIssuer(ctx, types.IssuerSpec{
-		Name:             cert.Spec.IssuerName,
-		Namespace:        cert.Namespace,
-		Email:            cert.Spec.Email,
-		IngressClassName: cert.Spec.IngressClassName,
+		Name:          cert.Spec.IssuerName,
+		Namespace:     cert.Namespace,
+		Email:         cert.Spec.Email,
+		HTTP01Ingress: cert.Spec.HTTP01Ingress,
 		OwnerReferences: []metav1.OwnerReference{
 			*metav1.NewControllerRef(cert, certificatev1alpha1.GroupVersion.WithKind("Certificate")),
 		},

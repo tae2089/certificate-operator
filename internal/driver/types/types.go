@@ -19,6 +19,7 @@ package types
 import (
 	"context"
 
+	acmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,11 +68,11 @@ type UploadResult struct {
 
 // IssuerSpec contains specification for creating an Issuer
 type IssuerSpec struct {
-	Name             string
-	Namespace        string
-	Email            string
-	IngressClassName string
-	OwnerReferences  []metav1.OwnerReference
+	Name            string
+	Namespace       string
+	Email           string
+	HTTP01Ingress   *acmev1.ACMEChallengeSolverHTTP01Ingress // Advanced HTTP-01 configuration
+	OwnerReferences []metav1.OwnerReference
 }
 
 // IssuerResult contains the result of Issuer creation

@@ -73,9 +73,18 @@ func (d *Driver) EnsureIssuer(ctx context.Context, spec drivertypes.IssuerSpec) 
 			issuer.OwnerReferences = spec.OwnerReferences
 		}
 
-		ingressClass := spec.IngressClassName
-		if ingressClass == "" {
-			ingressClass = "nginx"
+		// Configure HTTP-01 solver
+		var http01Ingress *acmev1.ACMEChallengeSolverHTTP01Ingress
+
+		if spec.HTTP01Ingress != nil {
+			// Use provided HTTP01Ingress configuration
+			http01Ingress = spec.HTTP01Ingress
+		} else {
+			// Default to nginx ingress class
+			defaultClass := "nginx"
+			http01Ingress = &acmev1.ACMEChallengeSolverHTTP01Ingress{
+				Class: &defaultClass,
+			}
 		}
 
 		issuer.Spec = certmanagerv1.IssuerSpec{
@@ -91,9 +100,7 @@ func (d *Driver) EnsureIssuer(ctx context.Context, spec drivertypes.IssuerSpec) 
 					Solvers: []acmev1.ACMEChallengeSolver{
 						{
 							HTTP01: &acmev1.ACMEChallengeSolverHTTP01{
-								Ingress: &acmev1.ACMEChallengeSolverHTTP01Ingress{
-									Class: &ingressClass,
-								},
+								Ingress: http01Ingress,
 							},
 						},
 					},

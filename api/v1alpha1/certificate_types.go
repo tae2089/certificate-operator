@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	acmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,10 +39,10 @@ type CertificateSpec struct {
 	// +optional
 	IssuerName string `json:"issuerName,omitempty"`
 
-	// IngressClassName is the name of the Ingress Class to be used for the HTTP01 solver.
-	// Defaults to "nginx" if not specified.
+	// HTTP01Ingress provides advanced configuration for HTTP-01 ACME challenge solver.
+	// If not specified, defaults to nginx ingress class.
 	// +optional
-	IngressClassName string `json:"ingressClassName,omitempty"`
+	HTTP01Ingress *acmev1.ACMEChallengeSolverHTTP01Ingress `json:"http01Ingress,omitempty"`
 
 	// CloudflareSecretRef is the name of the Secret containing Cloudflare credentials (api-token).
 	// +optional
