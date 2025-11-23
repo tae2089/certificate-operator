@@ -39,6 +39,7 @@ import (
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	certificatev1alpha1 "github.com/tae2089/certificate-operator/api/v1alpha1"
+	"github.com/tae2089/certificate-operator/internal/api"
 	"github.com/tae2089/certificate-operator/internal/controller"
 	"github.com/tae2089/certificate-operator/internal/driver"
 	// +kubebuilder:scaffold:imports
@@ -48,6 +49,21 @@ var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
+
+// @title Certificate Operator API
+// @version 1.0
+// @description REST API for managing Certificate custom resources in Kubernetes
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.email support@println.kr
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /
+// @schemes http https
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -66,6 +82,8 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableAPIServer bool
+	var apiServerPort string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -84,6 +102,10 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableAPIServer, "enable-api-server", true,
+		"Enable the REST API server for Certificate CRUD operations")
+	flag.StringVar(&apiServerPort, "api-server-port", "8080",
+		"The port on which the REST API server will listen")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -238,6 +260,19 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
+	}
+
+	// Start API server if enabled
+	if enableAPIServer {
+		setupLog.Info("API server is enabled, starting API server", "port", apiServerPort)
+		ctx := ctrl.SetupSignalHandler()
+
+		// Run API server in background goroutine
+		go func() {
+			if err := api.StartAPIServer(ctx, mgr.GetClient(), apiServerPort); err != nil {
+				setupLog.Error(err, "API server error")
+			}
+		}()
 	}
 
 	setupLog.Info("starting manager")
