@@ -262,10 +262,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup signal handler once and share it
+	ctx := ctrl.SetupSignalHandler()
+
 	// Start API server if enabled
 	if enableAPIServer {
 		setupLog.Info("API server is enabled, starting API server", "port", apiServerPort)
-		ctx := ctrl.SetupSignalHandler()
 
 		// Run API server in background goroutine
 		go func() {
@@ -276,7 +278,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}

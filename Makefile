@@ -161,14 +161,14 @@ swagger: ## Generate Swagger documentation
 		echo "Installing swag..."; \
 		go install github.com/swaggo/swag/cmd/swag@latest; \
 	}
-	swag init -g cmd/main.go -o docs --parseDependency --parseInternal
+	swag init -g cmd/main.go -o docs --parseInternal
 
 .PHONY: build
-build: manifests generate fmt vet swagger ## Build manager binary.
+build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 .PHONY: run
-run: manifests generate fmt vet swagger ## Run a controller from your host.
+run: manifests generate fmt vet swagger## Run a controller from your host.
 	go run ./cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.

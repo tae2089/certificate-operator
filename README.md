@@ -151,6 +151,119 @@ Apply the ClusterIssuer:
 kubectl apply -f clusterissuer.yaml
 ```
 
+## Cloud Provider Credentials
+
+Before uploading certificates to cloud providers, you need to create Kubernetes Secrets with the appropriate credentials.
+
+### Cloudflare Credentials
+
+Create a Secret with your Cloudflare API token:
+
+```bash
+kubectl create secret generic cloudflare-credentials \
+  --from-literal=api-token='your-cloudflare-api-token' \
+  -n default
+```
+
+Or using YAML:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-credentials
+  namespace: default
+type: Opaque
+stringData:
+  api-token: "your-cloudflare-api-token"
+```
+
+**Required Secret Keys:**
+- `api-token`: Cloudflare API token with SSL certificate permissions
+
+**How to get Cloudflare API token:**
+1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
+2. Create Token → Use template "Edit zone SSL"
+3. Select your zone and create token
+4. Copy the token value
+
+**Required Permissions:**
+- Zone - SSL and Certificates - Edit
+
+**Additional Requirements:**
+- You also need to provide `cloudflareZoneID` in the Certificate spec
+- Find your Zone ID in Cloudflare Dashboard → Your Domain → Overview (right sidebar)
+
+### AWS Credentials
+
+#### Option 1: Using IAM Role (Recommended for Production)
+
+Use IRSA (IAM Role for Service Account) or EC2 Instance Profile - no Secret required!
+
+**Required IAM Policy:**
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "acm:ImportCertificate",
+        "acm:DeleteCertificate",
+        "acm:AddTagsToCertificate",
+        "acm:DescribeCertificate"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+When using IAM Role, simply omit `awsSecretRef` in your Certificate CR.
+
+#### Option 2: Using Static Credentials
+
+Create a Secret with AWS access keys:
+
+```bash
+kubectl create secret generic aws-credentials \
+  --from-literal=access-key-id='AKIA...' \
+  --from-literal=secret-access-key='your-secret-key' \
+  --from-literal=region='us-east-1' \
+  -n default
+```
+
+Or using YAML:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+  namespace: default
+type: Opaque
+stringData:
+  access-key-id: "AKIA..."
+  secret-access-key: "your-secret-access-key"
+  region: "us-east-1"  # Optional - defaults to AWS_REGION or us-east-1
+```
+
+**Required Secret Keys:**
+- `access-key-id`: AWS Access Key ID (required)
+- `secret-access-key`: AWS Secret Access Key (required)
+- `region`: AWS region (optional - uses default credential chain if omitted)
+
+**How to create AWS Access Keys:**
+1. Go to [AWS IAM Console](https://console.aws.amazon.com/iam/)
+2. Users → Your User → Security Credentials
+3. Create Access Key → Select "Application running outside AWS"
+4. Copy Access Key ID and Secret Access Key
+
+**Security Best Practice:**
+- Use IAM Role (Option 1) for production
+- Create a dedicated IAM user with minimal permissions for testing only
+- Never commit credentials to version control
+
 ## Usage
 
 ### Basic Certificate
@@ -408,6 +521,132 @@ The operator uses a driver pattern for extensibility:
 1. Implement the `CloudProvider` interface
 2. Create new driver package under `internal/driver/`
 3. Add to `CertificateManager.uploadToCloudProviders()`
+
+## REST API Server
+
+The operator includes a built-in REST API server for managing Certificate resources via HTTP.
+
+### Features
+
+- 🌐 **RESTful API**: Full CRUD operations for Certificate resources
+- 📚 **Swagger UI**: Interactive API documentation at `/swagger/index.html`
+- 🔍 **Health Check**: Kubernetes-style health endpoint at `/healthz`
+- 🚀 **Goroutine Integration**: Runs alongside the operator in the same process
+
+### Enabling the API Server
+
+The API server is **enabled by default** on port 8080. You can configure it using command-line flags:
+
+```bash
+# Run with default settings (port 8080, enabled)
+./manager
+
+# Custom port
+./manager --api-server-port=9090
+
+# Disable API server
+./manager --enable-api-server=false
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/healthz` | Health check |
+| `GET` | `/swagger/*` | Swagger UI documentation |
+| `POST` | `/api/v1/certificates` | Create a Certificate |
+| `GET` | `/api/v1/certificates` | List all Certificates (all namespaces) |
+| `GET` | `/api/v1/namespaces/{namespace}/certificates` | List Certificates in namespace |
+| `GET` | `/api/v1/namespaces/{namespace}/certificates/{name}` | Get a Certificate |
+| `PUT` | `/api/v1/namespaces/{namespace}/certificates/{name}` | Update a Certificate |
+| `DELETE` | `/api/v1/namespaces/{namespace}/certificates/{name}` | Delete a Certificate |
+
+### Usage Examples
+
+#### Health Check
+
+```bash
+curl http://localhost:8080/healthz
+# Response: {"status":"healthy"}
+```
+
+#### Swagger UI
+
+Access the interactive API documentation in your browser:
+```
+http://localhost:8080/swagger/index.html
+```
+
+#### Create Certificate
+
+```bash
+curl -X POST http://localhost:8080/api/v1/certificates \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "api-example-cert",
+    "namespace": "default",
+    "domain": "api.example.com",
+    "clusterIssuerName": "letsencrypt-prod",
+    "cloudflareSecretRef": "cloudflare-credentials",
+    "cloudflareZoneID": "your-zone-id"
+  }'
+```
+
+#### List Certificates
+
+```bash
+# All namespaces
+curl http://localhost:8080/api/v1/certificates
+
+# Specific namespace
+curl http://localhost:8080/api/v1/namespaces/default/certificates
+```
+
+#### Get Certificate
+
+```bash
+curl http://localhost:8080/api/v1/namespaces/default/certificates/api-example-cert
+```
+
+#### Update Certificate
+
+```bash
+curl -X PUT http://localhost:8080/api/v1/namespaces/default/certificates/api-example-cert \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "updated.example.com",
+    "cloudflareEnabled": false
+  }'
+```
+
+#### Delete Certificate
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/namespaces/default/certificates/api-example-cert
+```
+
+### Accessing API Server in Kubernetes
+
+If the operator is running in a Kubernetes cluster, use port-forwarding to access the API:
+
+```bash
+# Port forward to local machine
+kubectl port-forward -n certificate-operator-system \
+  deployment/certificate-operator-controller-manager 8080:8080
+
+# Then access locally
+curl http://localhost:8080/healthz
+```
+
+### Generating Swagger Documentation
+
+Before deploying, generate Swagger documentation:
+
+```bash
+make swagger
+```
+
+This creates API documentation in the `docs/` directory, which is served by the API server.
 
 ## Troubleshooting
 

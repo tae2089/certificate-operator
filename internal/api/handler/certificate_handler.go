@@ -49,15 +49,68 @@ type UpdateCertificateRequest struct {
 
 // CertificateResponse represents a Certificate resource response
 type CertificateResponse struct {
-	Name      string                                `json:"name" example:"example-cert"`
-	Namespace string                                `json:"namespace" example:"default"`
-	Spec      certificatev1alpha1.CertificateSpec   `json:"spec"`
-	Status    certificatev1alpha1.CertificateStatus `json:"status"`
+	Name      string                    `json:"name" example:"example-cert"`
+	Namespace string                    `json:"namespace" example:"default"`
+	Spec      CertificateSpecResponse   `json:"spec"`
+	Status    CertificateStatusResponse `json:"status"`
+}
+
+// CertificateSpecResponse represents the spec of a Certificate
+type CertificateSpecResponse struct {
+	Domain              string `json:"domain" example:"example.com"`
+	ClusterIssuerName   string `json:"clusterIssuerName,omitempty" example:"letsencrypt-prod"`
+	CloudflareSecretRef string `json:"cloudflareSecretRef,omitempty" example:"cloudflare-credentials"`
+	CloudflareZoneID    string `json:"cloudflareZoneID,omitempty" example:"zone-id-123"`
+	CloudflareEnabled   *bool  `json:"cloudflareEnabled,omitempty"`
+	AWSSecretRef        string `json:"awsSecretRef,omitempty" example:"aws-credentials"`
+	AWSEnabled          *bool  `json:"awsEnabled,omitempty"`
+}
+
+// CertificateStatusResponse represents the status of a Certificate
+type CertificateStatusResponse struct {
+	CertificateRef          string `json:"certificateRef,omitempty"`
+	CloudflareUploaded      bool   `json:"cloudflareUploaded"`
+	CloudflareCertificateID string `json:"cloudflareCertificateID,omitempty"`
+	AWSUploaded             bool   `json:"awsUploaded"`
+	AWSCertificateARN       string `json:"awsCertificateARN,omitempty"`
+	LastUploadedCertHash    string `json:"lastUploadedCertHash,omitempty"`
+	LastUploadedTime        string `json:"lastUploadedTime,omitempty"`
 }
 
 // ErrorResponse represents an error response
 type ErrorResponse struct {
 	Error string `json:"error" example:"resource not found"`
+}
+
+// convertToResponse converts a Certificate to CertificateResponse
+func convertToResponse(cert *certificatev1alpha1.Certificate) CertificateResponse {
+	var lastUploadedTime string
+	if cert.Status.LastUploadedTime != nil {
+		lastUploadedTime = cert.Status.LastUploadedTime.Format("2006-01-02T15:04:05Z07:00")
+	}
+
+	return CertificateResponse{
+		Name:      cert.Name,
+		Namespace: cert.Namespace,
+		Spec: CertificateSpecResponse{
+			Domain:              cert.Spec.Domain,
+			ClusterIssuerName:   cert.Spec.ClusterIssuerName,
+			CloudflareSecretRef: cert.Spec.CloudflareSecretRef,
+			CloudflareZoneID:    cert.Spec.CloudflareZoneID,
+			CloudflareEnabled:   cert.Spec.CloudflareEnabled,
+			AWSSecretRef:        cert.Spec.AWSSecretRef,
+			AWSEnabled:          cert.Spec.AWSEnabled,
+		},
+		Status: CertificateStatusResponse{
+			CertificateRef:          cert.Status.CertificateRef,
+			CloudflareUploaded:      cert.Status.CloudflareUploaded,
+			CloudflareCertificateID: cert.Status.CloudflareCertificateID,
+			AWSUploaded:             cert.Status.AWSUploaded,
+			AWSCertificateARN:       cert.Status.AWSCertificateARN,
+			LastUploadedCertHash:    cert.Status.LastUploadedCertHash,
+			LastUploadedTime:        lastUploadedTime,
+		},
+	}
 }
 
 // CreateCertificate godoc
@@ -99,12 +152,7 @@ func (h *CertificateHandler) CreateCertificate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, CertificateResponse{
-		Name:      cert.Name,
-		Namespace: cert.Namespace,
-		Spec:      cert.Spec,
-		Status:    cert.Status,
-	})
+	c.JSON(http.StatusCreated, convertToResponse(cert))
 }
 
 // ListCertificates godoc
@@ -124,12 +172,7 @@ func (h *CertificateHandler) ListCertificates(c *gin.Context) {
 
 	responses := make([]CertificateResponse, 0, len(certList.Items))
 	for _, cert := range certList.Items {
-		responses = append(responses, CertificateResponse{
-			Name:      cert.Name,
-			Namespace: cert.Namespace,
-			Spec:      cert.Spec,
-			Status:    cert.Status,
-		})
+		responses = append(responses, convertToResponse(&cert))
 	}
 
 	c.JSON(http.StatusOK, responses)
@@ -155,12 +198,7 @@ func (h *CertificateHandler) ListCertificatesInNamespace(c *gin.Context) {
 
 	responses := make([]CertificateResponse, 0, len(certList.Items))
 	for _, cert := range certList.Items {
-		responses = append(responses, CertificateResponse{
-			Name:      cert.Name,
-			Namespace: cert.Namespace,
-			Spec:      cert.Spec,
-			Status:    cert.Status,
-		})
+		responses = append(responses, convertToResponse(&cert))
 	}
 
 	c.JSON(http.StatusOK, responses)
@@ -190,12 +228,7 @@ func (h *CertificateHandler) GetCertificate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, CertificateResponse{
-		Name:      cert.Name,
-		Namespace: cert.Namespace,
-		Spec:      cert.Spec,
-		Status:    cert.Status,
-	})
+	c.JSON(http.StatusOK, convertToResponse(cert))
 }
 
 // UpdateCertificate godoc
@@ -259,12 +292,7 @@ func (h *CertificateHandler) UpdateCertificate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, CertificateResponse{
-		Name:      cert.Name,
-		Namespace: cert.Namespace,
-		Spec:      cert.Spec,
-		Status:    cert.Status,
-	})
+	c.JSON(http.StatusOK, convertToResponse(cert))
 }
 
 // DeleteCertificate godoc

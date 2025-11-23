@@ -1,0 +1,308 @@
+basePath: /
+definitions:
+  handler.CertificateResponse:
+    properties:
+      name:
+        example: example-cert
+        type: string
+      namespace:
+        example: default
+        type: string
+      spec:
+        $ref: '#/definitions/handler.CertificateSpecResponse'
+      status:
+        $ref: '#/definitions/handler.CertificateStatusResponse'
+    type: object
+  handler.CertificateSpecResponse:
+    properties:
+      awsEnabled:
+        type: boolean
+      awsSecretRef:
+        example: aws-credentials
+        type: string
+      cloudflareEnabled:
+        type: boolean
+      cloudflareSecretRef:
+        example: cloudflare-credentials
+        type: string
+      cloudflareZoneID:
+        example: zone-id-123
+        type: string
+      clusterIssuerName:
+        example: letsencrypt-prod
+        type: string
+      domain:
+        example: example.com
+        type: string
+    type: object
+  handler.CertificateStatusResponse:
+    properties:
+      awsCertificateARN:
+        type: string
+      awsUploaded:
+        type: boolean
+      certificateRef:
+        type: string
+      cloudflareCertificateID:
+        type: string
+      cloudflareUploaded:
+        type: boolean
+      lastUploadedCertHash:
+        type: string
+      lastUploadedTime:
+        type: string
+    type: object
+  handler.CreateCertificateRequest:
+    properties:
+      awsEnabled:
+        type: boolean
+      awsSecretRef:
+        example: aws-credentials
+        type: string
+      cloudflareEnabled:
+        type: boolean
+      cloudflareSecretRef:
+        example: cloudflare-credentials
+        type: string
+      cloudflareZoneID:
+        example: zone-id-123
+        type: string
+      clusterIssuerName:
+        example: letsencrypt-prod
+        type: string
+      domain:
+        example: example.com
+        type: string
+      name:
+        example: example-cert
+        type: string
+      namespace:
+        example: default
+        type: string
+    required:
+    - domain
+    - name
+    - namespace
+    type: object
+  handler.ErrorResponse:
+    properties:
+      error:
+        example: resource not found
+        type: string
+    type: object
+  handler.UpdateCertificateRequest:
+    properties:
+      awsEnabled:
+        type: boolean
+      awsSecretRef:
+        example: aws-credentials
+        type: string
+      cloudflareEnabled:
+        type: boolean
+      cloudflareSecretRef:
+        example: cloudflare-credentials
+        type: string
+      cloudflareZoneID:
+        example: zone-id-123
+        type: string
+      clusterIssuerName:
+        example: letsencrypt-prod
+        type: string
+      domain:
+        example: example.com
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@println.kr
+    name: API Support
+  description: REST API for managing Certificate custom resources in Kubernetes
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Certificate Operator API
+  version: "1.0"
+paths:
+  /api/v1/certificates:
+    get:
+      description: Get a list of all Certificate resources across all namespaces
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.CertificateResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: List all Certificates
+      tags:
+      - certificates
+    post:
+      consumes:
+      - application/json
+      description: Create a new Certificate resource in the specified namespace
+      parameters:
+      - description: Certificate to create
+        in: body
+        name: certificate
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateCertificateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.CertificateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Create a new Certificate
+      tags:
+      - certificates
+  /api/v1/namespaces/{namespace}/certificates:
+    get:
+      description: Get a list of Certificate resources in a specific namespace
+      parameters:
+      - description: Namespace
+        in: path
+        name: namespace
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.CertificateResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: List Certificates in a namespace
+      tags:
+      - certificates
+  /api/v1/namespaces/{namespace}/certificates/{name}:
+    delete:
+      description: Delete a Certificate resource
+      parameters:
+      - description: Namespace
+        in: path
+        name: namespace
+        required: true
+        type: string
+      - description: Certificate name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: ""
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Delete a Certificate
+      tags:
+      - certificates
+    get:
+      description: Get a specific Certificate resource by name and namespace
+      parameters:
+      - description: Namespace
+        in: path
+        name: namespace
+        required: true
+        type: string
+      - description: Certificate name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.CertificateResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Get a Certificate
+      tags:
+      - certificates
+    put:
+      consumes:
+      - application/json
+      description: Update an existing Certificate resource
+      parameters:
+      - description: Namespace
+        in: path
+        name: namespace
+        required: true
+        type: string
+      - description: Certificate name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Certificate updates
+        in: body
+        name: certificate
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateCertificateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.CertificateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Update a Certificate
+      tags:
+      - certificates
+schemes:
+- http
+- https
+swagger: "2.0"
