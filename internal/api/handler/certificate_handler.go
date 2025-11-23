@@ -17,9 +17,9 @@ type CertificateHandler struct {
 }
 
 // NewCertificateHandler creates a new CertificateHandler
-func NewCertificateHandler(client client.Client) *CertificateHandler {
+func NewCertificateHandler(k8sClient client.Client) *CertificateHandler {
 	return &CertificateHandler{
-		Client: client,
+		Client: k8sClient,
 	}
 }
 
