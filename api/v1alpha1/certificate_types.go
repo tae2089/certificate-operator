@@ -51,14 +51,19 @@ type CertificateSpec struct {
 	// +optional
 	CloudflareEnabled *bool `json:"cloudflareEnabled,omitempty"`
 
-	// AWSSecretRef is the name of the Secret containing AWS credentials (access-key-id, secret-access-key, region).
+	// AWS contains AWS-specific configuration.
 	// +optional
-	AWSSecretRef string `json:"awsSecretRef,omitempty"`
+	AWS *AWS `json:"aws,omitempty"`
+}
 
-	// AWSEnabled controls whether to upload certificate to AWS ACM.
-	// Defaults to true if AWSSecretRef is set, or if using IAM Role.
+type AWS struct {
+	// CredentialType is the type of AWS credentials to use.
+	// +kubebuilder:default="assume-role"
+	CredentialType string `json:"credentialType,omitempty"`
+
+	// SecretRef is the name of the Secret containing AWS credentials (access-key-id, secret-access-key, region).
 	// +optional
-	AWSEnabled *bool `json:"awsEnabled,omitempty"`
+	SecretRef string `json:"secretRef,omitempty"`
 }
 
 // CertificateStatus defines the observed state of Certificate.

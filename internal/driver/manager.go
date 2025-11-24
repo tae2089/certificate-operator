@@ -164,26 +164,24 @@ func (m *CertificateManager) uploadToCloudProviders(
 	}
 
 	// Upload to AWS ACM if configured
-	awsEnabled := cert.Spec.AWSEnabled == nil || *cert.Spec.AWSEnabled
-	if awsEnabled && certChanged {
-		if cert.Spec.AWSSecretRef != "" || cert.Status.AWSCertificateARN != "" {
-			certData.ExistingID = cert.Status.AWSCertificateARN
-			driver := awsdriver.NewDriver(awsdriver.Config{
-				Client:    m.k8sClient,
-				SecretRef: cert.Spec.AWSSecretRef,
-				Namespace: cert.Namespace,
-				Domain:    cert.Spec.Domain,
-			})
+	if cert.Spec.AWS != nil && certChanged {
+		certData.ExistingID = cert.Status.AWSCertificateARN
+		driver := awsdriver.NewDriver(awsdriver.Config{
+			Client:         m.k8sClient,
+			CredentialType: cert.Spec.AWS.CredentialType,
+			SecretRef:      cert.Spec.AWS.SecretRef,
+			Namespace:      cert.Namespace,
+			Domain:         cert.Spec.Domain,
+		})
 
-			result, err := driver.Upload(ctx, certData)
-			if err != nil {
-				log.Error(err, "Failed to upload to AWS")
-			} else {
-				cert.Status.AWSUploaded = true
-				cert.Status.AWSCertificateARN = result.Identifier
-				*statusUpdated = true
-				log.Info("Successfully uploaded certificate to AWS ACM", "arn", result.Identifier)
-			}
+		result, err := driver.Upload(ctx, certData)
+		if err != nil {
+			log.Error(err, "Failed to upload to AWS")
+		} else {
+			cert.Status.AWSUploaded = true
+			cert.Status.AWSCertificateARN = result.Identifier
+			*statusUpdated = true
+			log.Info("Successfully uploaded certificate to AWS ACM", "arn", result.Identifier)
 		}
 	}
 
@@ -198,10 +196,11 @@ func (m *CertificateManager) Finalize(ctx context.Context, cert *certificatev1al
 	// Cleanup AWS ACM certificate if it was uploaded
 	if cert.Status.AWSCertificateARN != "" {
 		driver := awsdriver.NewDriver(awsdriver.Config{
-			Client:    m.k8sClient,
-			SecretRef: cert.Spec.AWSSecretRef,
-			Namespace: cert.Namespace,
-			Domain:    cert.Spec.Domain,
+			Client:         m.k8sClient,
+			CredentialType: cert.Spec.AWS.CredentialType,
+			SecretRef:      cert.Spec.AWS.SecretRef,
+			Namespace:      cert.Namespace,
+			Domain:         cert.Spec.Domain,
 		})
 
 		if err := driver.Delete(ctx, cert.Status.AWSCertificateARN); err != nil {

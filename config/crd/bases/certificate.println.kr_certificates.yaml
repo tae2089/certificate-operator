@@ -39,15 +39,19 @@ spec:
           spec:
             description: CertificateSpec defines the desired state of Certificate.
             properties:
-              awsEnabled:
-                description: |-
-                  AWSEnabled controls whether to upload certificate to AWS ACM.
-                  Defaults to true if AWSSecretRef is set, or if using IAM Role.
-                type: boolean
-              awsSecretRef:
-                description: AWSSecretRef is the name of the Secret containing AWS
-                  credentials (access-key-id, secret-access-key, region).
-                type: string
+              aws:
+                description: AWS contains AWS-specific configuration.
+                properties:
+                  credentialType:
+                    default: assume-role
+                    description: CredentialType is the type of AWS credentials to
+                      use.
+                    type: string
+                  secretRef:
+                    description: SecretRef is the name of the Secret containing AWS
+                      credentials (access-key-id, secret-access-key, region).
+                    type: string
+                type: object
               cloudflareEnabled:
                 description: |-
                   CloudflareEnabled controls whether to upload certificate to Cloudflare.

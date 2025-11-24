@@ -25,26 +25,14 @@ func NewCertificateHandler(k8sClient client.Client) *CertificateHandler {
 
 // CreateCertificateRequest represents the request body for creating a Certificate
 type CreateCertificateRequest struct {
-	Name                string `json:"name" binding:"required" example:"example-cert"`
-	Namespace           string `json:"namespace" binding:"required" example:"default"`
-	Domain              string `json:"domain" binding:"required" example:"example.com"`
-	ClusterIssuerName   string `json:"clusterIssuerName,omitempty" example:"letsencrypt-prod"`
-	CloudflareSecretRef string `json:"cloudflareSecretRef,omitempty" example:"cloudflare-credentials"`
-	CloudflareZoneID    string `json:"cloudflareZoneID,omitempty" example:"zone-id-123"`
-	CloudflareEnabled   *bool  `json:"cloudflareEnabled,omitempty"`
-	AWSSecretRef        string `json:"awsSecretRef,omitempty" example:"aws-credentials"`
-	AWSEnabled          *bool  `json:"awsEnabled,omitempty"`
+	Name      string                              `json:"name" binding:"required" example:"example-cert"`
+	Namespace string                              `json:"namespace" binding:"required" example:"default"`
+	Spec      certificatev1alpha1.CertificateSpec `json:"spec" binding:"required"`
 }
 
 // UpdateCertificateRequest represents the request body for updating a Certificate
 type UpdateCertificateRequest struct {
-	Domain              string `json:"domain,omitempty" example:"example.com"`
-	ClusterIssuerName   string `json:"clusterIssuerName,omitempty" example:"letsencrypt-prod"`
-	CloudflareSecretRef string `json:"cloudflareSecretRef,omitempty" example:"cloudflare-credentials"`
-	CloudflareZoneID    string `json:"cloudflareZoneID,omitempty" example:"zone-id-123"`
-	CloudflareEnabled   *bool  `json:"cloudflareEnabled,omitempty"`
-	AWSSecretRef        string `json:"awsSecretRef,omitempty" example:"aws-credentials"`
-	AWSEnabled          *bool  `json:"awsEnabled,omitempty"`
+	Spec certificatev1alpha1.CertificateSpec `json:"spec" binding:"required"`
 }
 
 // CertificateResponse represents a Certificate resource response
@@ -57,24 +45,15 @@ type CertificateResponse struct {
 
 // CertificateSpecResponse represents the spec of a Certificate
 type CertificateSpecResponse struct {
-	Domain              string `json:"domain" example:"example.com"`
-	ClusterIssuerName   string `json:"clusterIssuerName,omitempty" example:"letsencrypt-prod"`
-	CloudflareSecretRef string `json:"cloudflareSecretRef,omitempty" example:"cloudflare-credentials"`
-	CloudflareZoneID    string `json:"cloudflareZoneID,omitempty" example:"zone-id-123"`
-	CloudflareEnabled   *bool  `json:"cloudflareEnabled,omitempty"`
-	AWSSecretRef        string `json:"awsSecretRef,omitempty" example:"aws-credentials"`
-	AWSEnabled          *bool  `json:"awsEnabled,omitempty"`
+	Domain string `json:"domain" example:"example.com"`
 }
 
 // CertificateStatusResponse represents the status of a Certificate
 type CertificateStatusResponse struct {
-	CertificateRef          string `json:"certificateRef,omitempty"`
-	CloudflareUploaded      bool   `json:"cloudflareUploaded"`
-	CloudflareCertificateID string `json:"cloudflareCertificateID,omitempty"`
-	AWSUploaded             bool   `json:"awsUploaded"`
-	AWSCertificateARN       string `json:"awsCertificateARN,omitempty"`
-	LastUploadedCertHash    string `json:"lastUploadedCertHash,omitempty"`
-	LastUploadedTime        string `json:"lastUploadedTime,omitempty"`
+	CertificateRef     string `json:"certificateRef,omitempty"`
+	CloudflareUploaded bool   `json:"cloudflareUploaded"`
+	AWSUploaded        bool   `json:"awsUploaded"`
+	LastUploadedTime   string `json:"lastUploadedTime,omitempty"`
 }
 
 // ErrorResponse represents an error response
@@ -93,22 +72,13 @@ func convertToResponse(cert *certificatev1alpha1.Certificate) CertificateRespons
 		Name:      cert.Name,
 		Namespace: cert.Namespace,
 		Spec: CertificateSpecResponse{
-			Domain:              cert.Spec.Domain,
-			ClusterIssuerName:   cert.Spec.ClusterIssuerName,
-			CloudflareSecretRef: cert.Spec.CloudflareSecretRef,
-			CloudflareZoneID:    cert.Spec.CloudflareZoneID,
-			CloudflareEnabled:   cert.Spec.CloudflareEnabled,
-			AWSSecretRef:        cert.Spec.AWSSecretRef,
-			AWSEnabled:          cert.Spec.AWSEnabled,
+			Domain: cert.Spec.Domain,
 		},
 		Status: CertificateStatusResponse{
-			CertificateRef:          cert.Status.CertificateRef,
-			CloudflareUploaded:      cert.Status.CloudflareUploaded,
-			CloudflareCertificateID: cert.Status.CloudflareCertificateID,
-			AWSUploaded:             cert.Status.AWSUploaded,
-			AWSCertificateARN:       cert.Status.AWSCertificateARN,
-			LastUploadedCertHash:    cert.Status.LastUploadedCertHash,
-			LastUploadedTime:        lastUploadedTime,
+			CertificateRef:     cert.Status.CertificateRef,
+			CloudflareUploaded: cert.Status.CloudflareUploaded,
+			AWSUploaded:        cert.Status.AWSUploaded,
+			LastUploadedTime:   lastUploadedTime,
 		},
 	}
 }
@@ -136,15 +106,7 @@ func (h *CertificateHandler) CreateCertificate(c *gin.Context) {
 			Name:      req.Name,
 			Namespace: req.Namespace,
 		},
-		Spec: certificatev1alpha1.CertificateSpec{
-			Domain:              req.Domain,
-			ClusterIssuerName:   req.ClusterIssuerName,
-			CloudflareSecretRef: req.CloudflareSecretRef,
-			CloudflareZoneID:    req.CloudflareZoneID,
-			CloudflareEnabled:   req.CloudflareEnabled,
-			AWSSecretRef:        req.AWSSecretRef,
-			AWSEnabled:          req.AWSEnabled,
-		},
+		Spec: req.Spec,
 	}
 
 	if err := h.Client.Create(context.Background(), cert); err != nil {
@@ -264,29 +226,8 @@ func (h *CertificateHandler) UpdateCertificate(c *gin.Context) {
 		return
 	}
 
-	// Update fields if provided
-	if req.Domain != "" {
-		cert.Spec.Domain = req.Domain
-	}
-	if req.ClusterIssuerName != "" {
-		cert.Spec.ClusterIssuerName = req.ClusterIssuerName
-	}
-	if req.CloudflareSecretRef != "" {
-		cert.Spec.CloudflareSecretRef = req.CloudflareSecretRef
-	}
-	if req.CloudflareZoneID != "" {
-		cert.Spec.CloudflareZoneID = req.CloudflareZoneID
-	}
-	if req.CloudflareEnabled != nil {
-		cert.Spec.CloudflareEnabled = req.CloudflareEnabled
-	}
-	if req.AWSSecretRef != "" {
-		cert.Spec.AWSSecretRef = req.AWSSecretRef
-	}
-	if req.AWSEnabled != nil {
-		cert.Spec.AWSEnabled = req.AWSEnabled
-	}
-
+	// Update spec with the provided spec
+	cert.Spec = req.Spec
 	if err := h.Client.Update(context.Background(), cert); err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return

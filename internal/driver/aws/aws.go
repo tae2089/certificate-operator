@@ -35,27 +35,30 @@ import (
 
 // Driver implements the CloudProvider interface for AWS ACM
 type Driver struct {
-	client    client.Client
-	secretRef string
-	namespace string
-	domain    string
+	client         client.Client
+	credentialType string
+	secretRef      string
+	namespace      string
+	domain         string
 }
 
 // Config holds AWS driver configuration
 type Config struct {
-	Client    client.Client
-	SecretRef string // Empty string means use IRSA/Instance Profile
-	Namespace string
-	Domain    string
+	Client         client.Client
+	CredentialType string
+	SecretRef      string // Empty string means use IRSA/Instance Profile
+	Namespace      string
+	Domain         string
 }
 
 // NewDriver creates a new AWS ACM driver
 func NewDriver(cfg Config) *Driver {
 	return &Driver{
-		client:    cfg.Client,
-		secretRef: cfg.SecretRef,
-		namespace: cfg.Namespace,
-		domain:    cfg.Domain,
+		client:         cfg.Client,
+		credentialType: cfg.CredentialType,
+		secretRef:      cfg.SecretRef,
+		namespace:      cfg.Namespace,
+		domain:         cfg.Domain,
 	}
 }
 
@@ -128,46 +131,57 @@ func (d *Driver) Delete(ctx context.Context, identifier string) error {
 	return nil
 }
 
-// loadAWSConfig loads AWS configuration from secret or default credential chain
+// loadAWSConfig loads AWS configuration based on credential type
 func (d *Driver) loadAWSConfig(ctx context.Context) (aws.Config, error) {
 	log := logf.FromContext(ctx)
 
-	// If secretRef is empty, use default credential chain (IRSA, Instance Profile, etc.)
-	if d.secretRef == "" {
-		log.Info("Using AWS default credential chain (IRSA/Instance Profile)")
+	switch d.credentialType {
+	case "access-key":
+		// Use static credentials from Kubernetes Secret
+		if d.secretRef == "" {
+			return aws.Config{}, fmt.Errorf("secretRef is required when using access-key credential type")
+		}
+
+		// Get AWS credentials from Secret
+		awsSecret := &corev1.Secret{}
+		if err := d.client.Get(ctx, types.NamespacedName{
+			Name:      d.secretRef,
+			Namespace: d.namespace,
+		}, awsSecret); err != nil {
+			return aws.Config{}, fmt.Errorf("failed to get AWS secret: %w", err)
+		}
+
+		accessKeyID := string(awsSecret.Data["access-key-id"])
+		secretAccessKey := string(awsSecret.Data["secret-access-key"])
+		region := string(awsSecret.Data["region"])
+
+		if accessKeyID == "" || secretAccessKey == "" {
+			return aws.Config{}, fmt.Errorf("AWS credentials incomplete in secret (access-key-id and secret-access-key required)")
+		}
+
+		// Create AWS config with static credentials
+		configOpts := []func(*config.LoadOptions) error{
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				accessKeyID,
+				secretAccessKey,
+				"",
+			)),
+		}
+
+		// Add region if specified
+		if region != "" {
+			configOpts = append(configOpts, config.WithRegion(region))
+		}
+
+		log.Info("Using AWS access-key credentials from secret", "secretRef", d.secretRef)
+		return config.LoadDefaultConfig(ctx, configOpts...)
+
+	case "assume-role", "":
+		// Use default credential chain (IRSA, Instance Profile, etc.)
+		log.Info("Using AWS default credential chain (IRSA/Instance Profile/AssumeRole)", "credentialType", d.credentialType)
 		return config.LoadDefaultConfig(ctx)
+
+	default:
+		return aws.Config{}, fmt.Errorf("unsupported credential type: %s (supported types: access-key, assume-role)", d.credentialType)
 	}
-
-	// Get AWS credentials from Secret
-	awsSecret := &corev1.Secret{}
-	if err := d.client.Get(ctx, types.NamespacedName{
-		Name:      d.secretRef,
-		Namespace: d.namespace,
-	}, awsSecret); err != nil {
-		return aws.Config{}, fmt.Errorf("failed to get AWS secret: %w", err)
-	}
-
-	accessKeyID := string(awsSecret.Data["access-key-id"])
-	secretAccessKey := string(awsSecret.Data["secret-access-key"])
-	region := string(awsSecret.Data["region"])
-
-	if accessKeyID == "" || secretAccessKey == "" {
-		return aws.Config{}, fmt.Errorf("AWS credentials incomplete in secret (access-key-id and secret-access-key required)")
-	}
-
-	// Create AWS config with static credentials
-	configOpts := []func(*config.LoadOptions) error{
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			accessKeyID,
-			secretAccessKey,
-			"",
-		)),
-	}
-
-	// Add region if specified
-	if region != "" {
-		configOpts = append(configOpts, config.WithRegion(region))
-	}
-
-	return config.LoadDefaultConfig(ctx, configOpts...)
 }
